@@ -1,8 +1,7 @@
 #include "Arduino.h"
 #include "LoRaWan_APP.h"
-#include <Wire.h>
-#include "HT_SSD1306Wire.h"
 
+/********************************* LoRa Config *********************************************/
 #define RF_FREQUENCY 868000000
 #define TX_OUTPUT_POWER 10
 #define LORA_BANDWIDTH 0
@@ -27,11 +26,8 @@ static RadioEvents_t RadioEvents;
 typedef enum { LOWPOWER, STATE_TX } States_t;
 States_t state;
 
-SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED,
-                    GEOMETRY_128_64, RST_OLED);
-
 void OnTxDone() {
-  Serial.println("TX OK");
+  Serial.println("TX DONE");
   state = STATE_TX;
 }
 
@@ -64,49 +60,46 @@ bool readSerialPayload() {
   String line = Serial.readStringUntil('\n');
   line.trim();
 
-  int idx1 = line.indexOf(',');
-  int idx2 = line.indexOf(',', idx1 + 1);
-  int idx3 = line.indexOf(',', idx2 + 1);
-  int idx4 = line.indexOf(',', idx3 + 1);
+  int i1 = line.indexOf(',');
+  int i2 = line.indexOf(',', i1 + 1);
+  int i3 = line.indexOf(',', i2 + 1);
+  int i4 = line.indexOf(',', i3 + 1);
 
-  if (idx4 == -1) return false;
+  if (i4 == -1) return false;
 
-  payload.num1 = line.substring(0, idx1).toInt();
-  payload.num2 = line.substring(idx1 + 1, idx2).toInt();
-  payload.num3 = line.substring(idx2 + 1, idx3).toFloat();
-  payload.num4 = line.substring(idx3 + 1, idx4).toFloat();
+  payload.num1 = line.substring(0, i1).toInt();
+  payload.num2 = line.substring(i1 + 1, i2).toInt();
+  payload.num3 = line.substring(i2 + 1, i3).toFloat();
+  payload.num4 = line.substring(i3 + 1, i4).toFloat();
 
   memset(payload.text, 0, sizeof(payload.text));
-  line.substring(idx4 + 1).toCharArray(payload.text, 6);
+  line.substring(i4 + 1).toCharArray(payload.text, 6);
 
   return true;
 }
 
 void setup() {
   Serial.begin(115200);
-  display.init();
-  display.clear();
-  display.display();
+  delay(500);
   lora_init();
 
+  Serial.println("=== V3 EMISOR ===");
   Serial.println("Formato: int,int,float,float,text");
+  Serial.println("Ejemplo: 1,2,3.3,4.4,qwert");
 }
 
 void loop() {
   if (state == STATE_TX && readSerialPayload()) {
     uint32_t t = millis();
 
-    display.clear();
-    display.drawString(0, 0, "V3 TX");
-    display.drawString(0, 12, payload.text);
-    display.drawString(0, 24, "ms:");
-    display.drawString(30, 24, String(t));
-    display.display();
-
     Serial.printf(
-      "TX [%lu ms] -> %d,%d,%.2f,%.2f,%s\n",
-      t, payload.num1, payload.num2,
-      payload.num3, payload.num4, payload.text
+      "[TX %lu ms] %d,%d,%.2f,%.2f,%s\n",
+      t,
+      payload.num1,
+      payload.num2,
+      payload.num3,
+      payload.num4,
+      payload.text
     );
 
     Radio.Send((uint8_t*)&payload, sizeof(Payload));
