@@ -9,22 +9,23 @@ const int loraMISO = 35;
 const int loraSCK = 33;
 
 int SyncWord = 0x22;
-String lastMessage = "";
+String dataToSend = "";
 
 void setup() {
   Serial.begin(115200);
   
   while (!Serial);
-  
+  Serial.println("LoRa Transmitter ESP32");
+  Serial.println("Listo para enviar texto");
+  Serial.println("-----------------------");
+
   // SPI
   SPI.begin(loraSCK, loraMISO, loraMOSI, loraNSS);
-  
-  // pines LoRa
   LoRa.setPins(loraNSS, loraRST, loraDI0);
 
   // 433mhz
   if (!LoRa.begin(433E6)) {
-    Serial.println("Error de Inicializacion de LoRa");
+    Serial.println("Error iniciando LoRa");
     while (1);
   }
 
@@ -34,8 +35,8 @@ void setup() {
   LoRa.setCodingRate4(8);
   LoRa.setSyncWord(SyncWord);
 
-  Serial.println("Transmisor listo");
-  Serial.println("Ingresar valor:");
+  Serial.println("Configuracion completa");
+  Serial.println();
 }
 
 void loop() {
@@ -44,19 +45,34 @@ void loop() {
     input.trim();
     
     if (input.length() > 0) {
-      lastMessage = input;
+      dataToSend = input;
       
-      // Enviar por LoRa
+      Serial.print("Enviando: \"");
+      Serial.print(dataToSend);
+      Serial.println("\"");
+      
+      // Medir tiempo de envio
+      unsigned long startTime = millis();
+      
       LoRa.beginPacket();
-      LoRa.print(input);
-      LoRa.endPacket();
+      LoRa.print(dataToSend);
+      int result = LoRa.endPacket();
       
-      Serial.print("Enviado: ");
-      Serial.println(input);
-      Serial.println("-----------------");
-      Serial.println();
+      unsigned long endTime = millis();
+      unsigned long sendTime = endTime - startTime;
+      
+      if (result == 1) {
+        Serial.print("Envio exitoso (");
+        Serial.print(sendTime);
+        Serial.println(" ms)");
+      } else {
+        Serial.println("Error en envio");
+      }
+      
+      Serial.println("------------------------");
+      Serial.println("");
     }
   }
   
-  delay(50);
+  delay(100);
 }
