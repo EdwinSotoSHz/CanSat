@@ -1,5 +1,7 @@
 #include "Arduino.h"
 #include "LoRaWan_APP.h"
+#include <Wire.h>
+#include "HT_SSD1306Wire.h"
 
 /********************************* LoRa Config *********************************************/
 #define RF_FREQUENCY 868000000
@@ -19,7 +21,6 @@ struct Payload {
 };
 
 Payload payload;
-
 static RadioEvents_t RadioEvents;
 
 typedef enum { LOWPOWER, STATE_RX } States_t;
@@ -28,6 +29,11 @@ States_t state;
 int16_t Rssi;
 int8_t Snr;
 bool received = false;
+
+SSD1306Wire factory_display(
+  0x3c, 500000, SDA_OLED, SCL_OLED,
+  GEOMETRY_128_64, RST_OLED
+);
 
 void OnRxDone(uint8_t *data, uint16_t size, int16_t rssi, int8_t snr) {
   if (size == sizeof(Payload)) {
@@ -59,16 +65,43 @@ void lora_init() {
 
 void setup() {
   Serial.begin(115200);
-  delay(500);
-  lora_init();
+  delay(200);
 
-  Serial.println("=== V2 RECEPTOR ===");
+  factory_display.init();
+  factory_display.clear();
+  factory_display.drawString(0, 0, "V2 RECEPTOR");
+  factory_display.drawString(0, 12, "Esperando RX");
+  factory_display.display();
+
+  lora_init();
 }
 
 void loop() {
   if (received) {
     received = false;
     uint32_t t = millis();
+
+    factory_display.clear();
+    factory_display.drawString(0, 0, "V2 RX");
+    factory_display.drawString(
+    0, 12,
+    "n1:" + String(payload.num1) +
+    " n2:" + String(payload.num2)
+    );
+    factory_display.drawString(
+    0, 24,
+    "n3:" + String(payload.num3, 2)
+    );
+    factory_display.drawString(
+    0, 36,
+    "n4:" + String(payload.num4, 2)
+    );
+    factory_display.drawString(
+    0, 48,
+    "R:" + String(Rssi) +
+    " S:" + String(Snr)
+    );
+    factory_display.display();
 
     Serial.printf(
       "[RX %lu ms] %d,%d,%.2f,%.2f,%s | RSSI:%d SNR:%d\n",

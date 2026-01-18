@@ -1,5 +1,7 @@
 #include "Arduino.h"
 #include "LoRaWan_APP.h"
+#include <Wire.h>
+#include "HT_SSD1306Wire.h"
 
 /********************************* LoRa Config *********************************************/
 #define RF_FREQUENCY 868000000
@@ -20,11 +22,15 @@ struct Payload {
 };
 
 Payload payload;
-
 static RadioEvents_t RadioEvents;
 
 typedef enum { LOWPOWER, STATE_TX } States_t;
 States_t state;
+
+SSD1306Wire factory_display(
+  0x3c, 500000, SDA_OLED, SCL_OLED,
+  GEOMETRY_128_64, RST_OLED
+);
 
 void OnTxDone() {
   Serial.println("TX DONE");
@@ -64,7 +70,6 @@ bool readSerialPayload() {
   int i2 = line.indexOf(',', i1 + 1);
   int i3 = line.indexOf(',', i2 + 1);
   int i4 = line.indexOf(',', i3 + 1);
-
   if (i4 == -1) return false;
 
   payload.num1 = line.substring(0, i1).toInt();
@@ -80,17 +85,43 @@ bool readSerialPayload() {
 
 void setup() {
   Serial.begin(115200);
-  delay(500);
+  delay(200);
+
+  factory_display.init();
+  factory_display.clear();
+  factory_display.drawString(0, 0, "V3 EMISOR");
+  factory_display.drawString(0, 12, "Esperando datos");
+  factory_display.display();
+
   lora_init();
 
-  Serial.println("=== V3 EMISOR ===");
   Serial.println("Formato: int,int,float,float,text");
-  Serial.println("Ejemplo: 1,2,3.3,4.4,qwert");
 }
 
 void loop() {
   if (state == STATE_TX && readSerialPayload()) {
     uint32_t t = millis();
+
+    factory_display.clear();
+    factory_display.drawString(0, 0, "V3 TX");
+    factory_display.drawString(
+      0, 12,
+      "n1:" + String(payload.num1) +
+      " n2:" + String(payload.num2)
+    );
+    factory_display.drawString(
+      0, 24,
+      "n3:" + String(payload.num3, 2)
+    );
+    factory_display.drawString(
+      0, 36,
+      "n4:" + String(payload.num4, 2)
+    );
+    factory_display.drawString(
+      0, 48,
+      String(payload.text)
+    );
+    factory_display.display();
 
     Serial.printf(
       "[TX %lu ms] %d,%d,%.2f,%.2f,%s\n",
