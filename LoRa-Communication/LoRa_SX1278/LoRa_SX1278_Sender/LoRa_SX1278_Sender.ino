@@ -2,7 +2,7 @@
 
 // pines TRANSMISOR
 const int loraRST = 23;
-const int loraDI0 = 7;
+const int loraDI0 = 4;
 const int loraNSS = 15;
 const int loraMOSI = 32;
 const int loraMISO = 35;
