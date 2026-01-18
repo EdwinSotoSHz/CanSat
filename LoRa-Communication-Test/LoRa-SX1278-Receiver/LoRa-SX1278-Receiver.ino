@@ -9,16 +9,19 @@ const int loraMISO = 22;
 const int loraSCK = 23;
 
 int SyncWord = 0x22;
-String lastReceived = "";
-int packetCount = 0;
+
+// Mejor estructura
+struct Payload {
+  int16_t num1;  // 2 bytes (-999 a 999)
+  int16_t num2; // 2 bytes (-999 a 999)
+  float num3; // 4 bytes
+  float num4;  // 4 bytes
+  char text[6]; // 5 caracteres max
+};
 
 void setup() {
   Serial.begin(115200);
-  
   while (!Serial);
-  Serial.println("LoRa Receiver ESP32");
-  Serial.println("Esperando...");
-  Serial.println("--------------");
 
   // SPI
   SPI.begin(loraSCK, loraMISO, loraMOSI, loraNSS);
@@ -26,79 +29,46 @@ void setup() {
 
   // 433mhz
   if (!LoRa.begin(433E6)) {
-    Serial.println("Error iniciando LoRa");
     while (1);
   }
-  
-  // Configurar parámetros
-  LoRa.setSpreadingFactor(12);
-  LoRa.setSignalBandwidth(62.5E3);
-  LoRa.setCodingRate4(8);
+
+  // Configurar parámetros con mejor optimización (aun confiable, pero solo para test)
+  LoRa.setSpreadingFactor(9);
+  LoRa.setSignalBandwidth(125E3);
+  LoRa.setCodingRate4(6);
   LoRa.setSyncWord(SyncWord);
-  
-  Serial.println("Listo para recibir");
-  Serial.println();
+
+  Serial.println("Listo");
 }
 
-void loop() { 
+void loop() {
   int packetSize = LoRa.parsePacket();
-  
-  if (packetSize) { 
-    packetCount++;
-    String receivedData = "";
-    
-    while (LoRa.available()) {
-      receivedData += (char)LoRa.read();
-    }
-    
-    // Parametros de calidad
-    int rssi = LoRa.packetRssi();
-    float snr = LoRa.packetSnr();
-    int packetError = LoRa.packetFrequencyError();
-    
-    // Calcular porcentaje aproximado de calidad (formula ya existente)
-    // RSSI mejor cuanto más cercano a 0
-    int quality = 0;
-    if (rssi > -50) quality = 100;
-    else if (rssi > -70) quality = 80;
-    else if (rssi > -90) quality = 60;
-    else if (rssi > -110) quality = 40;
-    else quality = 20;
-    
-    // Informacion del paquete
-    Serial.print("Paquete #");
-    Serial.print(packetCount);
-    Serial.print(" [");
-    Serial.print(packetSize);
-    Serial.print(" bytes]: \"");
-    Serial.print(receivedData);
-    Serial.println("\"");
-    
-    // Parametros de calidad
-    Serial.print("RSSI: ");
-    Serial.print(rssi);
-    Serial.print(" dBm | SNR: ");
-    Serial.print(snr, 1);
-    Serial.print(" dB | Calidad: ");
-    Serial.print(quality);
-    Serial.print("%");
-    
-    if (packetError != 0) {
-      Serial.print(" | Error: ");
-      Serial.print(packetError);
-      Serial.print(" Hz");
-    }
-    
+  if (packetSize == sizeof(Payload)) {
+
+    //Recibir nueva estructura numeros y char
+    Payload cansatData;
+    LoRa.readBytes((uint8_t*)&cansatData, sizeof(cansatData));
+
+    // Imprimir
+    Serial.print("Recibido:");
+    Serial.print("\n num1 = ");
+    Serial.print(cansatData.num1);
+    Serial.print("\n num2 = ");
+    Serial.print(cansatData.num2);
+    Serial.print("\n num3 = ");
+    Serial.print(cansatData.num3);
+    Serial.print("\n num4 = ");
+    Serial.print(cansatData.num4);
+    Serial.print("\n char[5] = ");
+    Serial.print(cansatData.text);
+
     Serial.println();
-    
-    // Mensajes nuevos (tests)
-    if (receivedData != lastReceived) {
-      Serial.println("(NEW)");
-      lastReceived = receivedData;
-    }
-    
-    Serial.println("------------------------------------------------------");
+    Serial.print("RSSI =");
+    Serial.print(LoRa.packetRssi());
+    Serial.print(" | SNR =");
+    Serial.println(LoRa.packetSnr(), 1);
+    Serial.println("---------------------------------");
+    Serial.println("");
   }
-  
-  delay(50);
+  delay(10);
 }
