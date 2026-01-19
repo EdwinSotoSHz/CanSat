@@ -19,25 +19,36 @@ uint16_t receivedPackets = 0;
 uint16_t totalPackets = 0;
 bool imageReady = false;
 
-void onReceive(const esp_now_recv_info *info,
-               const uint8_t *data,
-               int len) {
+String metadata = "";
+
+void onReceive(const esp_now_recv_info*,
+               const uint8_t* data,
+               int) {
 
   image_packet_t pkt;
   memcpy(&pkt, data, sizeof(pkt));
 
+  // ---- metadata ----
   if (pkt.index == 0) {
+    metadata = "";
+    for (int i = 0; i < pkt.size; i++)
+      metadata += (char)pkt.data[i];
+
     if (imageBuffer) free(imageBuffer);
 
-    totalPackets = pkt.total;
+    totalPackets = pkt.total - 1;
     imageSize = totalPackets * PACKET_SIZE;
     imageBuffer = (uint8_t*)malloc(imageSize);
 
     receivedPackets = 0;
     imageReady = false;
+    return;
   }
 
-  memcpy(imageBuffer + pkt.index * PACKET_SIZE, pkt.data, pkt.size);
+  memcpy(imageBuffer + (pkt.index - 1) * PACKET_SIZE,
+         pkt.data,
+         pkt.size);
+
   receivedPackets++;
 
   if (receivedPackets == totalPackets) {
@@ -51,7 +62,7 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin("AsusE", "23011edpi");
-  while (WiFi.status() != WL_CONNECTED) delay(500);
+  while (WiFi.status() != WL_CONNECTED) delay(300);
 
   Serial.println(WiFi.localIP());
 
@@ -64,8 +75,12 @@ void setup() {
       return;
     }
 
-    server.send(200, "text/html",
-      "<h2>Imagen recibida</h2><img src='/img'>");
+    String html =
+      "<h2>Imagen recibida</h2>"
+      "<pre>" + metadata + "</pre>"
+      "<img src='/img'>";
+
+    server.send(200, "text/html", html);
   });
 
   server.on("/img", []() {
