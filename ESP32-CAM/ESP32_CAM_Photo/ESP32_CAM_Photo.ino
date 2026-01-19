@@ -53,13 +53,62 @@ void setup() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
-  config.frame_size = FRAMESIZE_QVGA;
-  config.jpeg_quality = 12;
-  config.fb_count = 1;
+  // ===== CONFIGURACIÓN CORREGIDA =====
+  // Resolución XGA para campo de visión más amplio (menos "zoom")
+  config.frame_size = FRAMESIZE_SVGA;      // 1024x768 - Más amplio
+  
+  // Calidad JPEG buena
+  config.jpeg_quality = 8;                // Mejor calidad (menor número = mejor)
+  
+  // Dos framebuffers para estabilidad
+  config.fb_count = 2;
 
   if (esp_camera_init(&config) != ESP_OK) {
     Serial.println("Error al iniciar cámara");
     return;
+  }
+
+  // ===== AJUSTES ESPECÍFICOS PARA BRILLO Y CONTRASTE =====
+  sensor_t *s = esp_camera_sensor_get();
+  if (s != NULL) {
+    Serial.println("Configurando sensor...");
+    
+    // 1. PRIMERO APAGAR CONTROLES AUTOMÁTICOS TEMPORALMENTE
+    s->set_gain_ctrl(s, 0);        // Ganancia manual
+    s->set_exposure_ctrl(s, 0);    // Exposición manual
+    s->set_awb_gain(s, 0);         // Balance blancos manual
+    
+    // 2. AJUSTES PARA MEJORAR BRILLO Y REDUCIR OPACIDAD
+    s->set_brightness(s, 1);       // Aumentar brillo (rango: -2 a 2)
+    s->set_contrast(s, 1);         // Aumentar contraste para más definición
+    s->set_saturation(s, 1);       // Aumentar saturación para colores más vivos
+    s->set_sharpness(s, 0);        // Nitidez normal (0)
+    
+    // 3. CONFIGURAR EXPOSICIÓN MANUAL PARA MÁS LUZ
+    s->set_aec_value(s, 400);      // Valor exposición más alto (rango: 0-1200)
+    // Prueba estos valores: 300 (interior), 400 (normal), 500-600 (más brillo)
+    
+    // 4. CONFIGURAR GANANCIA PARA MÁS SENSIBILIDAD A LA LUZ
+    s->set_gainceiling(s, GAINCEILING_8X);  // Ganancia máxima 8X
+    s->set_agc_gain(s, 5);         // Ganancia AGC (0-30)
+    
+    // 5. VOLVER A ENCENDER AUTOMÁTICOS CON CONFIGURACIÓN MÁS LUMINOSA
+    delay(100);
+    s->set_gain_ctrl(s, 1);        // Ganancia automática ON
+    s->set_exposure_ctrl(s, 1);    // Exposición automática ON
+    s->set_awb_gain(s, 1);         // Balance blancos automático ON
+    
+    // 6. CONFIGURAR MODO ESPECÍFICO PARA INTERIORES/EXTERIORES
+    s->set_wb_mode(s, 1);          // 1=Soleado (más cálido), 2=Nublado (más frío)
+    
+    // 7. ESPECIAL: Configuración especial para menos opacidad
+    s->set_special_effect(s, 0);   // 0=Sin efecto, 2=Negativo, 3=BN, etc.
+    
+    // 8. AJUSTAR LÍMITE DE EXPOSICIÓN
+    s->set_aec2(s, 0);             // 0=AEC desactivado, 1=AEC activado
+    s->set_ae_level(s, 0);         // Nivel exposición (-2 a 2)
+    
+    Serial.println("Sensor configurado");
   }
 
   // --- WiFi ---
@@ -74,6 +123,7 @@ void setup() {
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
   Serial.println("Escribe 1 y presiona Enter para tomar foto");
+  Serial.println("Configuración: XGA (1024x768), brillo aumentado");
 
   server.begin();
 }
@@ -91,6 +141,10 @@ void loop() {
       last_fb = esp_camera_fb_get();
       if (last_fb) {
         Serial.println("Foto capturada");
+        Serial.print("Tamaño: ");
+        Serial.print(last_fb->len);
+        Serial.println(" bytes");
+        Serial.print("Resolución: 1024x768 (XGA) - Campo más amplio");
       } else {
         Serial.println("Error al capturar foto");
       }
