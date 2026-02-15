@@ -10,7 +10,24 @@ const int loraSCK = 33;
 
 int SyncWord = 0x22;
 
-// Mejor estructura
+// ==========================================
+// PROTOCOLO DE FRAMES (Igual que HeltecV3)
+// ==========================================
+// Byte 0: Destino
+// Byte 1: Remitente  
+// Byte 2: ID Mensaje
+// Byte 3: Largo del Payload
+// Byte 4...N: Payload (estructura binaria)
+// ==========================================
+byte dir_local   = 0xA1; // MI DIRECCIÓN (Cambiada para no chocar)
+byte dir_destino = 0xB2; // DIRECCIÓN DEL RECEPTOR (Cambiada)
+
+byte id_msjLoRa = 0;     // Número de secuencia
+
+// Buffer para construir el paquete completo
+byte bufferPaquete[64];  // Suficiente para nuestra estructura
+
+// Mejor estructura (Payload)
 struct Payload {
   int16_t num1;  // 2 bytes (-999 a 999)
   int16_t num2; // 2 bytes (-999 a 999)
@@ -29,6 +46,7 @@ void setup() {
 
   // 433mhz
   if (!LoRa.begin(433E6)) {
+    Serial.println("Fallo LoRa!");
     while (1);
   }
 
@@ -39,6 +57,9 @@ void setup() {
   LoRa.setSyncWord(SyncWord);
 
   Serial.println("Listo (formato: int,int,float,float,text)");
+  Serial.print("Mi direccion: 0x"); Serial.println(dir_local, HEX);
+  Serial.print("Envio a: 0x"); Serial.println(dir_destino, HEX);
+  Serial.println("---------------------------------");
 }
 
 void loop() {
@@ -71,23 +92,40 @@ void loop() {
     // tiempo transcurrido
     unsigned long t0 = millis();
 
-    // Enviar la estructura en formato binario
+    // ==========================================
+    // CONSTRUIR FRAME (IGUAL QUE HELTEC)
+    // ==========================================
+    int idx = 0;
+    
+    // 1. CABECERA (METADATOS)
+    bufferPaquete[idx++] = dir_destino;           // Byte 0: ¿Para quién es?
+    bufferPaquete[idx++] = dir_local;              // Byte 1: ¿Quién soy yo?
+    bufferPaquete[idx++] = id_msjLoRa;             // Byte 2: Folio del mensaje
+    bufferPaquete[idx++] = sizeof(Payload);        // Byte 3: Tamaño del payload (fijo: 14 bytes)
+    
+    // 2. PAYLOAD (ESTRUCTURA BINARIA)
+    memcpy(&bufferPaquete[idx], &cansatData, sizeof(Payload));
+    idx += sizeof(Payload);
+    
+    // 3. ENVIAR POR LORA
     LoRa.beginPacket();
-    LoRa.write((uint8_t*)&cansatData, sizeof(cansatData));
+    LoRa.write(bufferPaquete, idx);  // Enviar todo el frame
     LoRa.endPacket();
 
+    // Incrementar ID para el próximo mensaje
+    id_msjLoRa++;
+
     // Imprimir
-    Serial.print("Enviado:");
-    Serial.print("\n num1 = ");
-    Serial.print(cansatData.num1);
-    Serial.print("\n num2 = ");
-    Serial.print(cansatData.num2);
-    Serial.print("\n num3 = ");
-    Serial.print(cansatData.num3);
-    Serial.print("\n num4 = ");
-    Serial.print(cansatData.num4);
-    Serial.print("\n char[5] = ");
-    Serial.print(cansatData.text);
+    Serial.print("Enviado Frame:");
+    Serial.print("\n  Destino: 0x"); Serial.print(dir_destino, HEX);
+    Serial.print("\n  Remite: 0x"); Serial.print(dir_local, HEX);
+    Serial.print("\n  ID: "); Serial.print(id_msjLoRa - 1);
+    Serial.print("\n  Tamano Payload: "); Serial.print(sizeof(Payload));
+    Serial.print("\n  num1 = "); Serial.print(cansatData.num1);
+    Serial.print("\n  num2 = "); Serial.print(cansatData.num2);
+    Serial.print("\n  num3 = "); Serial.print(cansatData.num3);
+    Serial.print("\n  num4 = "); Serial.print(cansatData.num4);
+    Serial.print("\n  char[5] = "); Serial.print(cansatData.text);
 
     Serial.println();
     Serial.print("(");
